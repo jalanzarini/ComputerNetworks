@@ -6,6 +6,7 @@
 #include <cstring>
 #include <thread>
 #include <vector>
+#include <fstream>
 using namespace std;
 
 // Receive message thread
@@ -14,14 +15,54 @@ void receiveMessage(int client_fd) {
     while (true) {
         memset(buffer, 0, sizeof(buffer));
         int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-        
+        cout << "Opa beleza." << endl;
+        cout << bytes_received << endl;
+        string msg;
+        msg += buffer;
+        string delimiter = " ";
+        string request = msg.substr(0, msg.find(delimiter));
+        string temp = msg.substr(msg.find("Tamanho: ") + 9);
+        cout << temp << endl;
+        int buf_size = stoi(temp.substr(0, temp.find("\n")));
+        msg = "";
+
+        while(buf_size > 0) {
+            cout << "Buffer size: " << buf_size << endl;
+            msg += buffer;
+            buf_size -= sizeof(buffer) - 1;
+            bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+        }
+
         if (bytes_received <= 0) {
             cout << "Server disconnected" << endl;
             close(client_fd);
             exit(0);
         }
 
-        cout << "Server response: " << buffer << endl;
+        if(request == "Chat") {
+            string chat_message = msg.substr(msg.find(delimiter) + 1);
+            cout << "Broadcasted message: " << chat_message << endl;
+        } else if(request == "Sair") {
+            cout << "Server has closed the connection." << endl;
+            close(client_fd);
+            exit(0);
+        }
+        else if (request == "OK"){
+            string data = msg.substr(msg.find("data:") + 5);
+            ofstream file("received_file.txt");
+            if (file.is_open()) {
+                file << data;
+                file.close();
+                cout << "File received and saved as 'received_file.txt'" << endl;
+            } else {
+                cerr << "Error opening file for writing." << endl;
+            }
+        }
+        else if (request == "ERRO_ARQUIVO_NAO_ENCONTRADO") {
+            cout << "Error: File not found on server." << endl;
+        } else {
+            cout << "Unknown request: " << request << endl;
+        }
     }
 }
 
@@ -62,8 +103,9 @@ int main() {
         cin.getline(buffer, sizeof(buffer) - 1);
         
         // Check if user wants to exit
-        if (strcmp(buffer, "exit") == 0) {
-            cout << "Exiting..." << endl;
+        if (strcmp(buffer, "Sair") == 0) {
+            cout << "Saindo..." << endl;
+            send(client_fd, buffer, strlen(buffer), 0);
             break;
         }
         

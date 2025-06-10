@@ -2,3 +2,4 @@
 *.mkv
 atividades/
 .vscode/
+**/teste/*

@@ -5,10 +5,13 @@
 #include <cstring>
 #include <thread>
 #include <vector>
+#include <fstream>
+#include <openssl/sha.h>
 using namespace std;
 
 // Defines
 #define BACKLOG 1280  // Maximum number of pending connections
+#define MAX_PACKET_SIZE 2048
 
 // Global vars
 vector<int> client_fds;  // Vector to store client file descriptors
@@ -43,22 +46,75 @@ void handleConnections(int server_fd)
 // Function to handle new connections with threads
 void handleClient(int client_fd)
 {
-
-
     char buffer[1024];
     while (true) {
-        memset(buffer, 0, sizeof(buffer));
-        int bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
         
+        int bytes_received = recv(client_fd, &buffer, sizeof(buffer), 0);
+
         if (bytes_received <= 0) {
             cout << "Client disconnected" << endl;
             break;
         }
 
-        cout << "Received: " << buffer << " from " << client_fd << endl;
+        string msg(buffer, bytes_received);
+        string delimiter = " ";
+        string request = msg.substr(0, msg.find(delimiter));
 
-        // Echo back to client
-        send(client_fd, buffer, bytes_received, 0);
+        if (request == "Sair") {
+            cout << "Client requested to exit" << endl;
+            break;  // Exit the loop if client sends "Sair"
+        }
+        else if (request == "Arquivo") {
+            string filename = msg.substr(msg.find(delimiter) + 1);
+            ifstream file(filename);
+
+            if(file.is_open()) {
+                string file_content;
+
+                // Read file content
+                string line;
+                while (getline(file, line)) {
+                    file_content += line + "\n";  // Append each line with a newline character
+                }
+
+                file.close();
+
+                // Send status message
+                string status = "OK";
+
+                string metadata = "Arquivo: " + filename + ", Tamanho: " + "temp" + "\n";
+
+                // Create hash of the file content
+                unsigned char hash[SHA256_DIGEST_LENGTH];
+                SHA256_CTX sha256;
+                SHA256_Init(&sha256);
+                SHA256_Update(&sha256, file_content.c_str(), file_content.size());
+                SHA256_Final(hash, &sha256);
+                
+                // Send hash to client
+                string hash_message = "Hash: " + string(reinterpret_cast<char*>(hash), SHA256_DIGEST_LENGTH);
+
+                string packet = status + " \n" + metadata + " \n" + hash_message + " \n" + "data:";
+
+                int size = packet.size() + file_content.size();
+                packet.replace(packet.find("temp"), 4, to_string(size));
+
+                cout << "Sending file: " << filename << " to client." << endl;
+                send(client_fd, packet.c_str(), packet.size(), 0);
+                for(int i = 0; i*MAX_PACKET_SIZE <= file_content.size(); i++){
+                    cout << file_content.substr(i*MAX_PACKET_SIZE, MAX_PACKET_SIZE) << endl;
+                    send(client_fd, file_content.substr(i*MAX_PACKET_SIZE, MAX_PACKET_SIZE).c_str(), MAX_PACKET_SIZE, 0);
+                }
+
+            } else {
+                string error_message = "ERRO_ARQUIVO_NAO_ENCONTRADO";
+                send(client_fd, error_message.c_str(), error_message.size(), 0);
+            }
+        }
+        else if (request == "Chat") {
+            string chat_message = msg.substr(msg.find(delimiter) + 1);
+            cout << "Chat message: " << chat_message << " from " << client_fd << endl;
+        }
     }
     close(client_fd);
 }
@@ -99,7 +155,7 @@ int main() {
         return -1;
     }
 
-    cout << "Server listening on port 8080..." << endl;
+    cout << "Servidor escutando na porta 8080..." << endl;
 
     // Handle incoming connections
     thread server_thread(handleConnections, server_fd);
@@ -108,17 +164,24 @@ int main() {
     // Wait for input message to broadcast to all clients
     string message;
     while (true) {
-        cout << "Enter message to broadcast (or 'exit' to quit): ";
+        cout << "Digite a mensagem para transmitir (ou 'Sair' para sair): ";
         getline(cin, message);
-        if (message == "exit") {
-            cout << "Exiting server..." << endl;
+
+        if (message == "Sair") {
+            cout << "Saindo do servidor..." << endl;
+            message += " ";
+            for (int client_fd : client_fds) {
+                send(client_fd, message.c_str(), message.size(), 0);
+            }
             break;
         }
+        
+        message = "Chat " + message;  // Prefix with "Chat" for consistency
+
         // Broadcast message to all clients
         for (int client_fd : client_fds) {
             send(client_fd, message.c_str(), message.size(), 0);
         }
-        cout << "Message broadcasted: " << message << endl;
     }
 
     // Clean up
