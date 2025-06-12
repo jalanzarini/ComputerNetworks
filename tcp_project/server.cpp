@@ -65,17 +65,19 @@ void handleClient(int client_fd)
         else if (command.rfind("Arquivo ", 0) == 0) {
             string filename = command.substr(8);
             if (!fileExists(filename)) {
-                send(client_fd, "ERRO", 4, 0);
+                send(client_fd, "ERRO", 5, 0);
                 continue;
             }
             
             string hash = SHA256(filename);
             auto file_data = readFile(filename);
-            uint32_t file_size = file_data.size();
+            int file_size = file_data.size();
 
-            send(client_fd, "OK", 2, 0);  // Acknowledge file request
-            sendAll(client_fd, (char*)&file_size, sizeof(file_size));  // Send file size
-            sendAll(client_fd, hash.c_str(), 64);  // Send file hash
+            int file_size_n = htons(file_size);
+
+            send(client_fd, "OKAY", 5, 0);  // Acknowledge file request
+            send(client_fd, &file_size_n, sizeof(file_size_n), 0);  // Send file size
+            send(client_fd, hash.c_str(), 65, 0);  // Send file hash
             sendAll(client_fd, file_data.data(), file_size);  // Send file data
         }
     }
@@ -125,8 +127,8 @@ int main() {
     server_thread.detach();  // Detach the server thread to run independently
 
     // Wait for input message to broadcast to all clients
-    string message;
     while (true) {
+        string message = "";
         cout << "Digite a mensagem para transmitir (ou 'Sair' para sair): ";
         getline(cin, message);
 
@@ -138,11 +140,12 @@ int main() {
             break;
         }
         
-        message = "Chat " + message;  // Prefix with "Chat" for consistency
+        message = message + "\0";  // Prefix with "Chat" for consistency
 
         // Broadcast message to all clients
         for (int client_fd : client_fds) {
-            send(client_fd, message.c_str(), message.size(), 0);
+            send(client_fd, "Chat", 5, 0);
+            send(client_fd, message.c_str(), 1024, 0);
         }
     }
 

@@ -14,42 +14,39 @@ using namespace std;
 void receiveMessage(int client_fd) {
     while (true) {
         char buffer[1024];
-        recv(client_fd, buffer, sizeof(buffer), 0);
-        if (strncmp(buffer, "OK", 2) == 0)
+        memset(buffer, 0, sizeof(buffer));
+        recv(client_fd, buffer, 5, 0);
+        if (strncmp(buffer, "OKAY", 2) == 0)
         {
-            cout << "chegou 1"<< buffer << endl;
-            uint64_t file_size;
-            rcvAll(client_fd, (char*)&file_size, sizeof(file_size));
-            
-            cout << "chegou 2" << file_size << endl;
-            
-            char hash[65] = {};
-            rcvAll(client_fd, hash, 64);
+            int file_size;
+            recv(client_fd, &file_size, sizeof(file_size), 0);
+            file_size = ntohs(file_size);
 
-            cout << "chegou 3" << hash << endl;
+            char hash[65] = {};
+            recv(client_fd, hash, 65, 0);
 
             vector<char> file_data(file_size);
             rcvAll(client_fd, file_data.data(), file_size);
             
-            cout << "chegou 4" << endl;
-
             string filename = "recebido";  // Extract filename from input
             ofstream file(filename, ios::binary);
             
-            cout << "chegou 5" << endl;
-
             file.write(file_data.data(), file_size);
             file.close();
-
-            cout << "chegou 6" << endl;
 
             string local_hash = SHA256(filename);
             if (hash != local_hash) {
                 cout << "Hash mismatch! Received: " << hash << ", Expected: " << local_hash << endl;
                 continue;
             }
-        } else if (strncmp(buffer, "Chat ", 5) == 0) {
-            cout << "Chat message: " << (buffer + 5) << endl;
+        } 
+        else if(strncmp(buffer, "ERRO", 4) == 0){
+            cout << "Arquivo não encontrado." << endl;
+        }
+        else if (strncmp(buffer, "Chat", 4) == 0) {
+            char msg[1024];
+            recv(client_fd, msg, sizeof(msg), 0);
+            cout << "Chat message: " << msg << endl;
         } 
         else if (strncmp(buffer, "Sair", 4) == 0) {
             cout << "Server has closed the connection." << endl;
@@ -93,18 +90,20 @@ int main() {
     while (true) {        
         // Get user input
         cout << "Insira a mensagem (ou 'Sair' para sair): ";
+        char buffer[1024];
         getline(cin, input);
+        memcpy(buffer, input.c_str(), 1024);
 
         // Check if user wants to exit
         if (input == "Sair") {
             cout << "Saindo..." << endl;
-            send(client_fd, input.c_str(), input.size(), 0);
+            send(client_fd, buffer, sizeof(buffer), 0);
             break;
         } else if (input.rfind("Chat ", 0) == 0){
             // Send message to server
-            send(client_fd, input.c_str(), input.size(), 0);
+            send(client_fd, buffer, sizeof(buffer), 0);
         } else if (input.rfind("Arquivo ", 0) == 0) {
-            send(client_fd, input.c_str(), input.size(), 0);
+            send(client_fd, buffer, sizeof(buffer), 0);
         } else {
             cout << "Comando desconhecido. Use 'Chat <mensagem>' ou 'Arquivo <nome_do_arquivo>'." << endl;
             continue;
