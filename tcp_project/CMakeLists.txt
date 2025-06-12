@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
 project(ServerTCPFTP)
 find_package(OpenSSL REQUIRED)
-add_executable(ServerTCPFTP server.cpp)
+add_executable(ServerTCPFTP server.cpp utils.cpp)
 target_link_libraries(ServerTCPFTP OpenSSL::SSL)
 
 project(ClientTCPFTP)
 find_package(OpenSSL REQUIRED)
-add_executable(ClientTCPFTP client.cpp)
+add_executable(ClientTCPFTP client.cpp utils.cpp)
 target_link_libraries(ClientTCPFTP OpenSSL::SSL)
