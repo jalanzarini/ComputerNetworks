@@ -28,7 +28,7 @@ void receiveMessage(int client_fd) {
             vector<char> file_data(file_size);
             rcvAll(client_fd, file_data.data(), file_size);
             
-            string filename = "recebido";  // Extract filename from input
+            string filename = "recebido.txt";  // Extract filename from input
             ofstream file(filename, ios::binary);
             
             file.write(file_data.data(), file_size);
