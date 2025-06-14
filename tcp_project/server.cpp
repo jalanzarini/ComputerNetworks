@@ -73,7 +73,7 @@ void handleClient(int client_fd)
             auto file_data = readFile(filename);
             int file_size = file_data.size();
 
-            int file_size_n = htons(file_size);
+            int file_size_n = htonl(file_size);
 
             send(client_fd, "OKAY", 5, 0);  // Acknowledge file request
             send(client_fd, &file_size_n, sizeof(file_size_n), 0);  // Send file size
