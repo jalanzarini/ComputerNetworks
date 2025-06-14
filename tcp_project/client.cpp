@@ -20,7 +20,7 @@ void receiveMessage(int client_fd) {
         {
             int file_size;
             recv(client_fd, &file_size, sizeof(file_size), 0);
-            file_size = ntohs(file_size);
+            file_size = ntohl(file_size);
 
             char hash[65] = {};
             recv(client_fd, hash, 65, 0);
