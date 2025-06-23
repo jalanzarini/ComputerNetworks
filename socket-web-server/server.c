@@ -55,7 +55,7 @@ void* client_handler(void* arg){
       fptr = fopen(filename, "rb");
       printf("%d\n", fptr == NULL);
       if(fptr == NULL){
-        fptr = fopen("./pages/404.html", "rb");
+        fptr = fopen("./pages/404.html", "r");
         fseek(fptr, 0, SEEK_END);
         long file_bytes = ftell(fptr);
         fseek(fptr, 0, SEEK_SET);
@@ -69,24 +69,25 @@ void* client_handler(void* arg){
         while(fgets(file_buffer, sizeof(file_buffer), fptr)){
           strcat(message_buffer, file_buffer);
         }
-        int bytes = tcpsocket_send(client_fd, message_buffer, strlen(message_buffer));
+        int bytes = tcpsocket_send(client_fd, message_buffer, sizeof(message_buffer));
         fclose(fptr);
       }
       else{
         fseek(fptr, 0, SEEK_END);
         long file_bytes = ftell(fptr);
         fseek(fptr, 0, SEEK_SET);
-        printf("file size: %d\n", file_bytes);
         char content_length[2123];
         sprintf(content_length, "Content-Length: %ld", file_bytes);
         strcat(message_buffer, "HTTP/1.1 200 OK\n");
-        strcat(message_buffer, "Content-Type: image/png\n");
+        strcat(message_buffer, "Content-Type: text/html\n");
         strcat(message_buffer, content_length);
         strcat(message_buffer, "\n\r\n");
         int bytes = tcpsocket_send(client_fd, message_buffer, strlen(message_buffer));
-        char file_buffer[2123456];
-        while(fgets(file_buffer, sizeof(file_buffer), fptr)){
-          int bytes = tcpsocket_send(client_fd, file_buffer, strlen(file_buffer));
+        char file_buffer[2123];
+        int size;
+        while(size = fread(file_buffer, sizeof(char), sizeof(file_buffer), fptr)){
+          int bytes = tcpsocket_send(client_fd, file_buffer, size);
+          printf("buff: %d\n", size);
         }
         fclose(fptr);
       }
@@ -115,7 +116,7 @@ void* connection_handler(void* arg){
 }
 
 int main(int argc, char* argv[]){
-  socket_fd = tcpsocket_create("127.0.0.1", 1234);
+  socket_fd = tcpsocket_create("127.0.0.1", atoi(argv[1]));
   tcpsocket_listen(socket_fd, 10);
   
   pthread_t connection_thread;
