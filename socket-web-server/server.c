@@ -127,7 +127,7 @@ void* connection_handler(void* arg){
 }
 
 int main(int argc, char* argv[]){
-  socket_fd = tcpsocket_create("127.0.0.1", atoi(argv[1]));
+  socket_fd = tcpsocket_create("127.0.0.1", 1234);
   tcpsocket_listen(socket_fd, 10);
   
   pthread_t connection_thread;
