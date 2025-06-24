@@ -7,7 +7,69 @@
 
 static int socket_fd;
 static char request_buffer[21234];
-static char message_buffer[21234];
+
+void send_file(int socket_fd, FILE* fptr, const char* status_code, const char* content_type){
+  char header_buffer[21234];
+  memset(header_buffer, 0, sizeof(header_buffer));
+ 
+  //Get file size
+  fseek(fptr, 0, SEEK_END);
+  long file_bytes = ftell(fptr);
+  fseek(fptr, 0, SEEK_SET);
+
+  char content_length[2123];
+  sprintf(content_length, "Content-Length: %ld\n", file_bytes);
+
+  char status[2123];
+  sprintf(status, "HTTP/1.1 %s\n", status_code);
+
+  char type[2123];
+  sprintf(type, "Content-Type: %s\n", content_type);
+
+  strcat(header_buffer, status);
+  strcat(header_buffer, type);
+  strcat(header_buffer, content_length);
+  strcat(header_buffer, "\r\n");
+  tcpsocket_send(socket_fd, header_buffer, strlen(header_buffer));
+  
+  int size;
+  char file_buffer[2123];
+  while(size = fread(file_buffer, sizeof(char), sizeof(file_buffer), fptr)){
+    tcpsocket_send(socket_fd, file_buffer, size);
+  }
+}
+
+void get_handler(int socket_fd){
+  // Parse filename to desired path
+  char filename[2123];
+  char subfilename[2123];
+  
+  memset(filename, 0, sizeof(filename));
+  
+  memset(subfilename, 0, sizeof(subfilename));
+  memcpy(subfilename, request_buffer+4, strchr(request_buffer+4, ' ')-(request_buffer+4));
+  strcat(subfilename, "\0");
+
+  if(subfilename[strlen(subfilename)-1] == '/') strcat(subfilename, "main.html");
+  
+  int isImage = 0;
+  if(strstr(subfilename, ".png") != NULL) strcat(filename, "./images"), isImage = 1;
+  else strcat(filename, "./pages");
+  strcat(filename, subfilename);
+
+  // Open file and build response
+  FILE* fptr;
+  fptr = fopen(filename, "rb");
+  if(fptr != NULL){
+    send_file(socket_fd, fptr, "200 OK", isImage ? "image/png": "text/html");
+    fclose(fptr);
+  }
+  else{
+    fptr = fopen("./pages/404.html", "rb");
+    send_file(socket_fd, fptr, "404 Not Found", "text/html");
+    fclose(fptr);
+  }
+}
 
 void* client_handler(void* arg){
   int* p_remote_fd = (int*)arg;
@@ -39,65 +101,14 @@ void* client_handler(void* arg){
     // Process request
     int get_request = 1;
     char* get_pos = strstr(request_buffer, "GET ");
-    if(get_pos != request_buffer) get_request = 0; 
+    if(get_pos != request_buffer) get_request = 0;
 
     // Send Response
-    memset(message_buffer, 0, sizeof(message_buffer));
-    if(get_request){
-      char filename[2123] = "./pages";
-      char subfilename[2123];
-      memset(subfilename, 0, sizeof(subfilename));
-      memcpy(subfilename, request_buffer+4, strchr(request_buffer+4, ' ')-(request_buffer+4));
-      if(strcmp(subfilename, "/") == 0) strcat(subfilename, "main.html");
-      strcat(filename, subfilename);
-      printf("%s %s\n", filename, subfilename);
-      FILE *fptr;
-      fptr = fopen(filename, "rb");
-      printf("%d\n", fptr == NULL);
-      if(fptr == NULL){
-        fptr = fopen("./pages/404.html", "r");
-        fseek(fptr, 0, SEEK_END);
-        long file_bytes = ftell(fptr);
-        fseek(fptr, 0, SEEK_SET);
-        char content_length[2123];
-        sprintf(content_length, "Content-Length: %ld", file_bytes);
-        strcat(message_buffer, "HTTP/1.1 404 Not Found\n");
-        strcat(message_buffer, "Content-Type: text/html\n");
-        strcat(message_buffer, content_length);
-        strcat(message_buffer, "\n\r\n");
-        char file_buffer[2123];
-        while(fgets(file_buffer, sizeof(file_buffer), fptr)){
-          strcat(message_buffer, file_buffer);
-        }
-        int bytes = tcpsocket_send(client_fd, message_buffer, sizeof(message_buffer));
-        fclose(fptr);
-      }
-      else{
-        fseek(fptr, 0, SEEK_END);
-        long file_bytes = ftell(fptr);
-        fseek(fptr, 0, SEEK_SET);
-        char content_length[2123];
-        sprintf(content_length, "Content-Length: %ld", file_bytes);
-        strcat(message_buffer, "HTTP/1.1 200 OK\n");
-        strcat(message_buffer, "Content-Type: text/html\n");
-        strcat(message_buffer, content_length);
-        strcat(message_buffer, "\n\r\n");
-        int bytes = tcpsocket_send(client_fd, message_buffer, strlen(message_buffer));
-        char file_buffer[2123];
-        int size;
-        while(size = fread(file_buffer, sizeof(char), sizeof(file_buffer), fptr)){
-          int bytes = tcpsocket_send(client_fd, file_buffer, size);
-          printf("buff: %d\n", size);
-        }
-        fclose(fptr);
-      }
-    }
+    if(get_request) get_handler(client_fd);
     else{
-      strcat(message_buffer, "HTTP/1.1 501 Not Implemented\n");
-      strcat(message_buffer, "Content-Type: text/html; charset=UTF-8\n");
-      strcat(message_buffer, "Content-Length: 202\n\n");
-      strcat(message_buffer, "<html>\n<head>\n<title>Function Not Implemented</title>\n</head>\n<body>\nYour request can not be completed because this functionality is currently under development.\n</body>\n</html>\n");
-      int bytes = tcpsocket_send(client_fd, message_buffer, sizeof(message_buffer));
+      FILE* fptr;
+      fptr = fopen("./pages/501.html", "rb");
+      send_file(client_fd, fptr, "501 Not Implemented", "text/html");
     }
     // Adjust next request header
     memset(request_buffer, 0, sizeof(request_buffer));
